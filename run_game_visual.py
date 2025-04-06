@@ -94,7 +94,7 @@ def image_selection_menu():
         return
 
     # Set preview dimensions using a larger width (same aspect ratio as background)
-    preview_width = 300
+    preview_width = 900
     bg_width = background_image.get_width() if background_image else WIDTH
     bg_height = background_image.get_height() if background_image else HEIGHT
     preview_height = int(preview_width * bg_height / bg_width)
@@ -167,13 +167,28 @@ def configuration_menu():
     btn_margin = 20
     
     images_rect = pygame.Rect((WIDTH - btn_width) // 2, 150, btn_width, btn_height)
-    back_rect = pygame.Rect((WIDTH - btn_width) // 2, 150 + btn_height + btn_margin, btn_width, btn_height)
+    volume_title_pos = (WIDTH // 2, 250 + btn_margin)
+
+    # Volume buttons
+    vol_btn_size = 50
+    vol_minus_rect = pygame.Rect(WIDTH // 2 - 75, 300, vol_btn_size, vol_btn_size)
+    vol_plus_rect = pygame.Rect(WIDTH // 2 + 25, 300, vol_btn_size, vol_btn_size)
+
+    # Som ativado/desativado button
+    sound_button_rect = pygame.Rect((WIDTH - btn_width) // 2, 380, btn_width, btn_height)
     
+    # State variable for sound (True for on, False for off)
+    sound_on = True
+
+    # Back button
+    back_rect = pygame.Rect((WIDTH - btn_width) // 2, 460, btn_width, btn_height)
+
     while config_running:
         if background_image:
             screen.blit(background_image, (0, 0))
         else:
             screen.fill(WHITE)
+        
         overlay = pygame.Surface((WIDTH, HEIGHT))
         overlay.set_alpha(150)
         overlay.fill(WHITE)
@@ -182,13 +197,47 @@ def configuration_menu():
         config_title = title_font.render("Configuration", True, BLACK)
         config_title_rect = config_title.get_rect(center=(WIDTH // 2, 80))
         screen.blit(config_title, config_title_rect)
-        
+
+        # Images button
         pygame.draw.rect(screen, LIGHT_BLUE, images_rect)
         pygame.draw.rect(screen, BLACK, images_rect, 2)
         images_text = button_font.render("Images", True, BLACK)
         images_text_rect = images_text.get_rect(center=images_rect.center)
         screen.blit(images_text, images_text_rect)
-        
+
+        # Volume title
+        vol_title = button_font.render("Volume", True, BLACK)
+        vol_title_rect = vol_title.get_rect(center=volume_title_pos)
+        screen.blit(vol_title, vol_title_rect)
+
+        # Volume buttons
+        pygame.draw.rect(screen, LIGHT_BLUE, vol_minus_rect)
+        pygame.draw.rect(screen, BLACK, vol_minus_rect, 2)
+        minus_text = button_font.render("-", True, BLACK)
+        minus_rect = minus_text.get_rect(center=vol_minus_rect.center)
+        screen.blit(minus_text, minus_rect)
+
+        pygame.draw.rect(screen, LIGHT_BLUE, vol_plus_rect)
+        pygame.draw.rect(screen, BLACK, vol_plus_rect, 2)
+        plus_text = button_font.render("+", True, BLACK)
+        plus_rect = plus_text.get_rect(center=vol_plus_rect.center)
+        screen.blit(plus_text, plus_rect)
+
+        # Volume value display
+        current_volume = pygame.mixer.music.get_volume()
+        vol_value_text = button_font.render(f"{int(current_volume * 100)}%", True, BLACK)
+        vol_value_rect = vol_value_text.get_rect(center=(WIDTH // 2, 330))
+        screen.blit(vol_value_text, vol_value_rect)
+
+        # Sound ON/OFF button
+        sound_text = "Sound: ON" if sound_on else "Sound: OFF"
+        pygame.draw.rect(screen, LIGHT_BLUE, sound_button_rect)
+        pygame.draw.rect(screen, BLACK, sound_button_rect, 2)
+        sound_text_surface = button_font.render(sound_text, True, BLACK)
+        sound_text_rect = sound_text_surface.get_rect(center=sound_button_rect.center)
+        screen.blit(sound_text_surface, sound_text_rect)
+
+        # Back button
         pygame.draw.rect(screen, LIGHT_BLUE, back_rect)
         pygame.draw.rect(screen, BLACK, back_rect, 2)
         back_text = button_font.render("Back", True, BLACK)
@@ -205,8 +254,25 @@ def configuration_menu():
                 mouse_pos = event.pos
                 if images_rect.collidepoint(mouse_pos):
                     image_selection_menu()
+                elif vol_minus_rect.collidepoint(mouse_pos):
+                    current_volume = pygame.mixer.music.get_volume()
+                    new_volume = max(0.0, round(current_volume - 0.05, 2))
+                    pygame.mixer.music.set_volume(new_volume)
+                elif vol_plus_rect.collidepoint(mouse_pos):
+                    current_volume = pygame.mixer.music.get_volume()
+                    new_volume = min(1.0, round(current_volume + 0.05, 2))
+                    pygame.mixer.music.set_volume(new_volume)
+                elif sound_button_rect.collidepoint(mouse_pos):
+                    # Toggle sound on/off
+                    sound_on = not sound_on
+                    if sound_on:
+                        pygame.mixer.music.unpause()  # Resume music if turned on
+                    else:
+                        pygame.mixer.music.pause()  # Pause music if turned off
                 elif back_rect.collidepoint(mouse_pos):
                     config_running = False
+
+
 
 def difficulty_menu():
     difficulties = [("Easy", "easy"), ("Medium", "medium"), ("Hard", "hard"), ("Impossible", "impossible")]
@@ -260,6 +326,15 @@ def difficulty_menu():
 
 def launch_game(module_path, difficulty=None):
     try:
+        # Trocar a música do menu pela música do jogo
+        pygame.mixer.music.stop()
+        try:
+            pygame.mixer.music.load("sounds/game_sound.mp3")  # Música da gameplay
+            pygame.mixer.music.set_volume(0.3)
+            pygame.mixer.music.play(-1)
+        except Exception as music_err:
+            print(f"Error loading gameplay music: {music_err}")
+
         game_module = importlib.import_module(module_path)
         if hasattr(game_module, "main"):
             if difficulty is not None:
@@ -270,6 +345,7 @@ def launch_game(module_path, difficulty=None):
             print(f"No 'main' function found in module {module_path}")
     except ImportError as e:
         print(f"Error importing module {module_path}: {e}")
+
 
 def main_menu():
     running = True
@@ -305,11 +381,20 @@ def main_menu():
                                 from game_optimized.AI.eval_hard import evaluate_hard as chosen_eval
                             elif difficulty == "impossible":
                                 from game_optimized.AI.eval_impossible import evaluate_impossible as chosen_eval
-                            import game_optimized.AI.ai_vs_p_main as ai_vs_p_main
-                            ai_vs_p_main.main(chosen_eval)
+                            import game_optimized.AI.ai_vs_p_main as ai_vs_player
+                            ai_vs_player.main(chosen_eval)
                         else:
                             launch_game(module_path)
         clock.tick(60)
 
 if __name__ == "__main__":
+    try:
+        pygame.mixer.init()
+        pygame.mixer.music.load("sounds/home_screen_sound.mp3")  # Altere para o caminho da tua música
+        pygame.mixer.music.set_volume(0.31)  # Volume suave
+        pygame.mixer.music.play(-1)  # -1 para repetir continuamente
+    except Exception as e:
+        print(f"Error loading background music: {e}")
+
     main_menu()
+
